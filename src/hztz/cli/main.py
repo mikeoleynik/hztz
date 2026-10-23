@@ -11,11 +11,11 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-app.add_typer(init.app, name="init")
-app.add_typer(audit.app, name="audit")
-app.add_typer(decompose.app, name="decompose")
-app.add_typer(next_cmd.app, name="next")
-app.add_typer(chat.app, name="chat")
+app.command()(init.init)
+app.command()(audit.audit)
+app.command()(decompose.decompose)
+app.command()(next_cmd.next)
+app.command()(chat.chat)
 
 
 def main() -> None:

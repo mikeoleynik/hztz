@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hz/audit/findings",
+  "type": "object",
+  "required": ["blocked", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "blocked": { "$ref": "../../common/schema.json#/$defs/blocked" },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "../../common/schema.json#/$defs/finding" }
+    }
+  }
+}

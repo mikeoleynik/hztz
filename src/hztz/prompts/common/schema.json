@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hz/common",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[RAODBT][0-9]+$" },
+    "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "key_or_id": { "type": "string", "pattern": "^([RAODBT][0-9]+|[a-z][a-z0-9_]*)$" },
+
+    "blocked": {
+      "type": ["object", "null"],
+      "required": ["reason", "refs"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": { "type": "string" },
+        "refs": { "type": "array", "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+
+    "evidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["line_start", "line_end", "quote"],
+          "additionalProperties": false,
+          "properties": {
+            "line_start": { "type": "integer", "minimum": 1 },
+            "line_end": { "type": "integer", "minimum": 1 },
+            "quote": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["decision"],
+          "additionalProperties": false,
+          "properties": { "decision": { "type": "string", "pattern": "^D[0-9]+$" } }
+        },
+        {
+          "type": "object",
+          "required": ["file", "quote"],
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "line_start": { "type": "integer", "minimum": 1 },
+            "line_end": { "type": "integer", "minimum": 1 },
+            "quote": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "finding": {
+      "type": "object",
+      "required": ["key", "matches", "kind", "missing", "severity", "confidence", "title", "detail", "requirements", "evidence", "what_to_specify"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "matches": { "type": ["string", "null"], "pattern": "^A[0-9]+$" },
+        "kind": { "enum": ["ambiguous", "incomplete", "inconsistent", "infeasible", "unverifiable"] },
+        "missing": {
+          "type": ["string", "null"],
+          "enum": ["requirement", "behavior", "error_handling", "edge_case", "nfr", "acceptance_criteria", "constraint", "definition", null]
+        },
+        "severity": { "enum": ["blocker", "high", "medium", "low"] },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "title": { "type": "string", "maxLength": 120 },
+        "detail": { "type": "string" },
+        "requirements": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^R[0-9]+$" } },
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+        "what_to_specify": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "incomplete" } } },
+          "then": { "properties": { "missing": { "type": "string" } } },
+          "else": { "properties": { "missing": { "type": "null" } } }
+        }
+      ]
+    },
+
+    "basis": {
+      "type": ["object", "null"],
+      "required": ["type", "ref", "quote"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["spec", "repo", "convention"] },
+        "ref": { "type": "string", "description": "R id, file[:lines], or convention name" },
+        "quote": { "type": "string" }
+      }
+    },
+
+    "option": {
+      "type": "object",
+      "required": ["label", "text", "consequence", "basis"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "pattern": "^[A-Z]$" },
+        "text": { "type": "string" },
+        "consequence": { "type": "string" },
+        "basis": { "$ref": "#/$defs/basis" }
+      }
+    },
+
+    "question": {
+      "type": "object",
+      "required": ["key", "matches", "text", "why", "audience", "findings", "options"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "matches": { "type": ["string", "null"], "pattern": "^O[0-9]+$" },
+        "text": { "type": "string" },
+        "why": { "type": "string" },
+        "audience": { "enum": ["business", "technical"] },
+        "findings": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/key_or_id" } },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/option" } }
+      }
+    }
+  }
+}

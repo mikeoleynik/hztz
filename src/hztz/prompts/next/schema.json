@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hz/next/context",
+  "type": "object",
+  "required": ["blocked", "example_files", "conventions", "approach", "already_done", "uncertainties"],
+  "additionalProperties": false,
+  "properties": {
+    "blocked": { "$ref": "../common/schema.json#/$defs/blocked" },
+    "example_files": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["path", "why"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" },
+          "why": { "type": "string", "maxLength": 200 }
+        }
+      }
+    },
+    "conventions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule", "file"],
+        "additionalProperties": false,
+        "properties": {
+          "rule": { "type": "string" },
+          "file": { "type": "string" }
+        }
+      }
+    },
+    "approach": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": { "type": "string" }
+    },
+    "already_done": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["done_when_index", "file"],
+        "additionalProperties": false,
+        "properties": {
+          "done_when_index": { "type": "integer", "minimum": 0 },
+          "file": { "type": "string" }
+        }
+      }
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "blocking"],
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "blocking": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hz/chat",
+  "type": "object",
+  "required": ["kind", "reply", "references", "proposals"],
+  "additionalProperties": false,
+  "properties": {
+    "kind": { "enum": ["explanation", "hypothesis", "proposal", "decision"] },
+    "reply": { "type": "string", "minLength": 1 },
+    "references": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string", "pattern": "^[RAODBT][0-9]+$" },
+          {
+            "type": "object",
+            "required": ["line_start", "line_end"],
+            "additionalProperties": false,
+            "properties": {
+              "line_start": { "type": "integer", "minimum": 1 },
+              "line_end": { "type": "integer", "minimum": 1 }
+            }
+          }
+        ]
+      }
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action", "target", "text", "rationale"],
+        "additionalProperties": false,
+        "properties": {
+          "action": { "enum": ["answer", "assume", "dismiss", "question", "done"] },
+          "target": { "type": ["string", "null"], "pattern": "^[AOT][0-9]+$" },
+          "text": { "type": "string" },
+          "for_task": { "type": ["string", "null"], "pattern": "^T[0-9]+$" },
+          "rationale": { "type": "string", "maxLength": 300 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "action": { "enum": ["answer", "assume"] } } },
+            "then": { "properties": { "target": { "type": "string", "pattern": "^O[0-9]+$" } } }
+          },
+          {
+            "if": { "properties": { "action": { "const": "done" } } },
+            "then": { "properties": { "target": { "type": "string", "pattern": "^T[0-9]+$" } } }
+          },
+          {
+            "if": { "properties": { "action": { "const": "question" } } },
+            "then": { "properties": { "target": { "type": "null" } } }
+          }
+        ]
+      }
+    }
+  }
+}

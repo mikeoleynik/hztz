@@ -1,0 +1,72 @@
+# Audit: {{ state.spec.path }} ({{ state.spec.hash.split(":", 1)[1][:4] }}…)
+
+{% set summary = state.summary %}
+## Summary
+
+{{ summary.feynman }}
+
+{% if summary.in_scope %}**In scope:** {{ summary.in_scope | join(" · ") }}
+{% endif %}
+{% if summary.out_of_scope %}**Out of scope:** {{ summary.out_of_scope | join(" · ") }}
+{% endif %}
+
+## Открытые вопросы
+
+{% set business = view.open_questions | selectattr("audience", "equalto", "business") | list %}
+{% set technical = view.open_questions | selectattr("audience", "equalto", "technical") | list %}
+### Аналитику
+
+{% for q in business %}
+#### {{ q.id }} — {{ q.text }}  [{{ q.severity }}]
+{{ q.why }}
+
+{% for o in q.options %}
+- {{ o.label }}) {{ o.text }} — {{ o.consequence }}{% if o.basis %}  (basis: {{ o.basis.ref }}){% endif %}
+{% endfor %}
+Находки: {{ q.findings | join(", ") }}
+
+{% endfor %}
+{% if not business %}_(нет)_
+{% endif %}
+
+### Технические (можно принять допущением)
+
+{% for q in technical %}
+#### {{ q.id }} — {{ q.text }}  [{{ q.severity }}]
+{{ q.why }}
+
+{% for o in q.options %}
+- {{ o.label }}) {{ o.text }} — {{ o.consequence }}{% if o.basis %}  (basis: {{ o.basis.ref }}){% endif %}
+{% endfor %}
+Находки: {{ q.findings | join(", ") }}
+
+{% endfor %}
+{% if not technical %}_(нет)_
+{% endif %}
+
+## Решения
+
+{% for d in view.decisions %}
+- {{ d.id }} · {{ d.kind }}{% if d.kind == "assumption" %} (ASSUMPTION){% endif %} · {{ d.closes | join(", ") }} · «{{ d.text }}»{% if d.option %} · option {{ d.option }}{% endif %}
+{% endfor %}
+{% if not view.decisions %}_(нет)_
+{% endif %}
+
+## Находки
+
+{% for f in view.findings %}
+### {{ f.id }} — {{ f.title }}
+Kind: {{ f.kind }}{% if f.missing %} / {{ f.missing }}{% endif %} · Severity: {{ f.severity }} · Confidence: {{ f.confidence }} · Status: {{ f.status }}{% if f.resolution %} ({{ f.resolution.by }}){% endif %}
+
+Требования: {{ f.requirements | join(", ") }}
+{% for e in f.evidence %}
+Evidence: {% if e.line_start %}стр. {{ e.line_start }}–{{ e.line_end }} «{{ e.quote }}»{% elif e.decision %}решение {{ e.decision }}{% else %}{{ e.file }} «{{ e.quote }}»{% endif %}
+{% endfor %}
+{{ f.what_to_specify }}
+{% if f.questions %}Вопросы: {{ f.questions | join(", ") }}{% endif %}
+
+{% endfor %}
+
+## Требования
+
+{{ view.requirements | map(attribute="id") | join(" · ") }}
