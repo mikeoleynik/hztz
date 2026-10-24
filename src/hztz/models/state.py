@@ -266,6 +266,7 @@ class Task(HZModel):
     notes: list[str] = Field(default_factory=list)
     status: TStatus = TStatus.todo
     needs_review: bool = False
+    acked_decisions: list[str] = Field(default_factory=list)
     started_at: datetime | None = None
     done_at: datetime | None = None
 

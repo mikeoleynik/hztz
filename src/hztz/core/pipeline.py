@@ -39,12 +39,19 @@ class StageRunner:
     def __init__(self) -> None:
         self._client = LLMClient(require_config())
 
-    def run(self, stage_prompt: str, schema_rel: str, user_blocks: list[str]) -> dict[str, Any]:
+    def run(
+        self,
+        stage_prompt: str,
+        schema_rel: str,
+        user_blocks: list[str],
+        *,
+        allow_blocked: bool = False,
+    ) -> dict[str, Any]:
         system = compose_system(stage_prompt)
         schema = dereference(schema_rel)
         user = "\n\n".join(b for b in user_blocks if b)
         response = self._client.complete_json(system, user, schema)
         jsonschema.validate(instance=response, schema=schema)
-        if response.get("blocked"):
+        if response.get("blocked") and not allow_blocked:
             raise StageBlockedError(str(response["blocked"]))
         return response

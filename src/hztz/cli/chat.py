@@ -1,6 +1,5 @@
 """Команда `hz chat` — разговор по ТЗ и графу состояния."""
 
-
 from hztz.cli.options import load_config_or_exit
 from hztz.cli.UI.console import console
 

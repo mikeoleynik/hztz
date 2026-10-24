@@ -5,10 +5,10 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
+from hztz.core.severity import open_ref_severity, question_severity
 from hztz.models.state import State
 
 _SEVERITY_RANK = {"blocker": 0, "high": 1, "medium": 2, "low": 3}
-_SEVERITIES = ["blocker", "high", "medium", "low"]
 
 
 def _finding_by_id(state: State) -> dict[str, Any]:
@@ -16,9 +16,7 @@ def _finding_by_id(state: State) -> dict[str, Any]:
 
 
 def _question_severity(state: State, q: Any) -> str:
-    by_id = _finding_by_id(state)
-    ranks = [_SEVERITY_RANK[by_id[fid].severity.value] for fid in q.findings if fid in by_id]
-    return _SEVERITIES[min(ranks)] if ranks else "low"
+    return question_severity(state, q)
 
 
 def _finding_questions(state: State) -> dict[str, list[str]]:
@@ -73,23 +71,10 @@ def render_audit_md(state: State) -> str:
 
 
 _SEV_RANK = {"blocker": 0, "high": 1, "medium": 2, "low": 3}
-_SEV_LIST = ["blocker", "high", "medium", "low"]
 
 
 def _decompose_item_severity(state: State, ref: str) -> str | None:
-    if ref.startswith("A"):
-        f = next((x for x in state.findings if x.id == ref), None)
-        if f and f.status.value == "open":
-            return f.severity.value
-        return None
-    if ref.startswith("O"):
-        q = next((x for x in state.questions if x.id == ref), None)
-        if q and q.status.value == "open":
-            fmap = {f.id: f for f in state.findings}
-            s = [_SEV_RANK[fmap[fid].severity.value] for fid in q.findings if fid in fmap]
-            return _SEV_LIST[min(s)] if s else None
-        return None
-    return None
+    return open_ref_severity(state, ref)
 
 
 def _decompose_task_blocked(state: State, t: Any) -> bool:

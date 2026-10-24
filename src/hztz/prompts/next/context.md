@@ -13,7 +13,7 @@ Given one already-selected task, prepare the **repository-specific context** an 
 - `<requirements>` — texts of the task's `R`.
 - `<decisions>` — texts of the block's `D` with `kind`.
 - `<repo_tree>` — directory listing of the relevant part of the repository.
-- `<task_files>` — current contents of files in `task.files` that exist (`action: modify`).
+- `<task_files>` — current contents of files on the block (`B.files`, `action: modify`) that exist.
 - `<candidates>` — contents of a few files the CLI pre-selected by path similarity (same directory, same suffix, same base class). You choose which are useful.
 
 ## Procedure

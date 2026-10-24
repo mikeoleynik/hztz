@@ -67,6 +67,7 @@ def _decision_block(d: Decision) -> dict[str, Any]:
         "option": d.option,
     }
 
+
 def _existing_finding_block(f: Finding) -> dict[str, Any]:
     quote = next((e.quote for e in f.evidence if e.quote), None)
     return {
@@ -309,12 +310,8 @@ def analyze(
             block("existing_findings", [_existing_finding_block(f) for f in prev_findings])
         )
     if prev_decisions := (existing.decisions if existing else []):
-        findings_blocks.append(
-            block("decisions", [_decision_block(d) for d in prev_decisions])
-        )
-    findings_resp = runner.run(
-        "audit/findings.md", "audit/schema/findings.json", findings_blocks
-    )
+        findings_blocks.append(block("decisions", [_decision_block(d) for d in prev_decisions]))
+    findings_resp = runner.run("audit/findings.md", "audit/schema/findings.json", findings_blocks)
     state.findings = _build_findings(state, findings_resp, prev_findings, numbered)
 
     # Стадия 3: questions
@@ -372,6 +369,11 @@ def dismiss(state: State, obj_id: str, text: str | None = None) -> State:
 
 
 def add_question(state: State, text: str, task: str | None = None) -> State:
+    target = None
+    if task is not None:
+        target = next((item for item in state.tasks if item.id == task), None)
+        if target is None:
+            raise ValueError(f"задача {task} не найдена")
     oid = bump_counter(state, "O")
     state.questions.append(
         Question(
@@ -383,4 +385,6 @@ def add_question(state: State, text: str, task: str | None = None) -> State:
             origin=QuestionOrigin(command="user", task=task),
         )
     )
+    if target is not None and oid not in target.blocked_by:
+        target.blocked_by.append(oid)
     return state

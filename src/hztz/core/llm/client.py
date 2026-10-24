@@ -40,9 +40,7 @@ class LLMClient:
             {"role": "user", "content": user},
         ]
 
-    def _via_tool_calling(
-        self, system: str, user: str, schema: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _via_tool_calling(self, system: str, user: str, schema: dict[str, Any]) -> dict[str, Any]:
         response = self._client.chat.completions.create(
             model=self._model,
             messages=cast(Any, self._messages(system, user)),

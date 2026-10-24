@@ -29,7 +29,7 @@
 {% endfor %}
 {% if not block.files %}_no repository context; choose paths per project conventions and list them in the PR_{% endif %}
 
-{% if context %}
+{% if context and (context.conventions or context.example_files or context.approach) %}
 ## Repository conventions
 {% for c in context.conventions %}
 - {{c.rule}} — `{{c.file}}`
@@ -51,7 +51,7 @@ Patterns to follow:
 - [{% if loop.index0 in already_done_indexes %}x{% else %} {% endif %}] {{c}}
 {% endfor %}
 
-{% if task.notes or open_items or context.uncertainties %}
+{% if task.notes or open_items or (context and context.uncertainties) %}
 ## Notes and open items
 {% for n in task.notes %}
 - {{n}}
@@ -59,9 +59,11 @@ Patterns to follow:
 {% for o in open_items %}
 - open, non-blocking: **{{o.id}}** {{o.text}} — implement as the specification states; do not resolve it yourself
 {% endfor %}
+{% if context %}
 {% for u in context.uncertainties %}
 - {% if u.blocking %}**UNRESOLVED**{% else %}unclear{% endif %}: {{u.text}}
 {% endfor %}
+{% endif %}
 {% endif %}
 
 ## Rules for the implementer

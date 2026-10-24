@@ -10,8 +10,9 @@ from hztz.cli.options import load_config_or_exit
 from hztz.cli.UI.console import console
 from hztz.core import audit as audit_core
 from hztz.core.pipeline import StageRunner
+from hztz.core.severity import question_severity
 from hztz.core.store import StateStore, short_hash
-from hztz.models.state import DKind, Question, State
+from hztz.models.state import DKind, State
 from hztz.templates.render import build_view, render_audit_md
 
 
@@ -63,8 +64,10 @@ def audit(
 
     _status(store, json_mode)
 
+
 def _is_id(s: str) -> bool:
     return len(s) >= 2 and s[0] in "RAOD" and s[1:].isdigit()
+
 
 def _analyze(store: StateStore, spec_path: Path, output: str | None) -> None:
     load_config_or_exit()
@@ -73,6 +76,7 @@ def _analyze(store: StateStore, spec_path: Path, output: str | None) -> None:
     state = audit_core.analyze(spec_path, store, runner, existing)
     _write_view(store, state, output)
     _print_summary(state)
+
 
 def _write_view(store: StateStore, state: State, output: str | None) -> None:
     md = render_audit_md(state)
@@ -83,6 +87,7 @@ def _write_view(store: StateStore, state: State, output: str | None) -> None:
     else:
         store.hz_dir.mkdir(parents=True, exist_ok=True)
         (store.hz_dir / "audit.md").write_text(md, encoding="utf-8")
+
 
 def _print_summary(state: State) -> None:
     spec = state.spec
@@ -95,13 +100,9 @@ def _print_summary(state: State) -> None:
         f"[bold]O[/bold] {len(state.questions)}"
     )
     open_q = [q for q in state.questions if q.status.value == "open"]
-    blockers = sum(1 for q in open_q if _q_severity(state, q) == "blocker")
+    blockers = sum(1 for q in open_q if question_severity(state, q) == "blocker")
     console.print(f"Открытых вопросов: {len(open_q)} (blocker {blockers})")
 
-def _q_severity(state: State, q: Question) -> str:
-    ranks = {"blocker": 0, "high": 1, "medium": 2, "low": 3}
-    s = [ranks[f.severity.value] for f in state.findings if f.id in q.findings]
-    return ["blocker", "high", "medium", "low"][min(s)] if s else "low"
 
 def _mutate(
     store: StateStore, obj_id: str, answer: str | None, assume: str | None, dismiss: bool
@@ -120,15 +121,21 @@ def _mutate(
     _write_view(store, state, None)
     console.print(f"[green]{obj_id} обновлён.[/green]")
 
+
 def _add_question(store: StateStore, text: str, for_task: str | None) -> None:
     state = store.load()
     if state is None:
         console.print("[red]Нет состояния. Сначала `hz audit SPEC`.[/red]")
         raise typer.Exit(code=2)
-    audit_core.add_question(state, text, for_task)
+    try:
+        audit_core.add_question(state, text, for_task)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
     store.save(state)
     _write_view(store, state, None)
     console.print("[green]Вопрос добавлен.[/green]")
+
 
 def _resolve(store: StateStore) -> None:
     state = store.load()
@@ -153,6 +160,7 @@ def _resolve(store: StateStore) -> None:
     store.save(state)
     _write_view(store, state, None)
 
+
 def _check(store: StateStore) -> None:
     state = store.load()
     if state is None:
@@ -160,11 +168,12 @@ def _check(store: StateStore) -> None:
     blockers = [
         q
         for q in state.questions
-        if q.status.value == "open" and _q_severity(state, q) == "blocker"
+        if q.status.value == "open" and question_severity(state, q) == "blocker"
     ]
     if blockers:
         console.print(f"[red]Открытых blocker-вопросов: {len(blockers)}[/red]")
         raise typer.Exit(code=3)
+
 
 def _status(store: StateStore, json_mode: bool) -> None:
     state = store.load()
@@ -184,6 +193,7 @@ def _status(store: StateStore, json_mode: bool) -> None:
         table.add_row(q["id"], q["severity"], q["audience"], q["text"])
     console.print(table)
     console.print("Next: hz audit --resolve")
+
 
 def _reset(store: StateStore) -> None:
     if store.state_path.exists():

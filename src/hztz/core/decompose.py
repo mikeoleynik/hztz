@@ -5,6 +5,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 from hztz.core.pipeline import StageRunner, block
+from hztz.core.severity import question_severity
 from hztz.core.store import bump_counter
 from hztz.models.state import (
     Block,
@@ -56,14 +57,6 @@ def _decision_block(d: Decision) -> dict[str, Any]:
     }
 
 
-def question_severity(state: State, findings: list[str]) -> str:
-    """`O.severity = max(A.severity)` по связанным находкам."""
-    ranks = {"blocker": 0, "high": 1, "medium": 2, "low": 3}
-    fmap = {f.id: f for f in state.findings}
-    scores = [ranks[fmap[fid].severity.value] for fid in findings if fid in fmap]
-    return ["blocker", "high", "medium", "low"][min(scores)] if scores else "low"
-
-
 def _question_requirements(state: State, q: Question) -> list[str]:
     fmap = {f.id: f for f in state.findings}
     reqs: list[str] = []
@@ -92,7 +85,7 @@ def _open_items(state: State) -> list[dict[str, Any]]:
                 {
                     "id": q.id,
                     "type": "O",
-                    "severity": question_severity(state, q.findings),
+                    "severity": question_severity(state, q),
                     "audience": q.audience.value,
                     "requirements": _question_requirements(state, q),
                     "text": q.text,
@@ -558,5 +551,9 @@ def _flag_needs_review(state: State) -> None:
         if task.status != TStatus.done:
             continue
         owner = block_by_id.get(task.block)
-        if owner and any(did in superseded for did in owner.decisions):
-            task.needs_review = True
+        pending = [
+            did
+            for did in (owner.decisions if owner else [])
+            if did in superseded and did not in task.acked_decisions
+        ]
+        task.needs_review = bool(pending)

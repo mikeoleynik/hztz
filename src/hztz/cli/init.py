@@ -41,6 +41,7 @@ def init(
         "[yellow]apiKey хранится в открытом виде (права 600) — не коммить этот файл.[/yellow]"
     )
 
+
 def _print_config() -> None:
     config = read_config()
     console.print(f"[bold]LLM-конфиг[/bold] · {config_path()}")
@@ -52,6 +53,7 @@ def _print_config() -> None:
     console.print(f"  model:   {config.provider.model}")
     console.print(f"  apiKey:  {mask_api_key(config.provider.apiKey)}")
     console.print(f"  persona: {config.persona}")
+
 
 def _prompt_config(current: HzConfig | None) -> HzConfig:
     base_url = typer.prompt(
