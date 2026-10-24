@@ -70,3 +70,133 @@ def render_audit_md(state: State) -> str:
     )
     template = env.get_template("audit.md.j2")
     return template.render(state=state, view=build_view(state))
+
+
+_SEV_RANK = {"blocker": 0, "high": 1, "medium": 2, "low": 3}
+_SEV_LIST = ["blocker", "high", "medium", "low"]
+
+
+def _decompose_item_severity(state: State, ref: str) -> str | None:
+    if ref.startswith("A"):
+        f = next((x for x in state.findings if x.id == ref), None)
+        if f and f.status.value == "open":
+            return f.severity.value
+        return None
+    if ref.startswith("O"):
+        q = next((x for x in state.questions if x.id == ref), None)
+        if q and q.status.value == "open":
+            fmap = {f.id: f for f in state.findings}
+            s = [_SEV_RANK[fmap[fid].severity.value] for fid in q.findings if fid in fmap]
+            return _SEV_LIST[min(s)] if s else None
+        return None
+    return None
+
+
+def _decompose_task_blocked(state: State, t: Any) -> bool:
+    return any(
+        (sev := _decompose_item_severity(state, ref)) is not None and _SEV_RANK[sev] <= 1
+        for ref in t.blocked_by
+    )
+
+
+def _mermaid_label(text: str) -> str:
+    return text.replace('"', "'")
+
+
+def _build_mermaid(state: State) -> str:
+    active = {t.id: t for t in state.tasks if t.status.value != "dropped"}
+    by_block: dict[str, list[Any]] = {}
+    for task in active.values():
+        by_block.setdefault(task.block, []).append(task)
+    active_block_ids = {b.id for b in state.blocks if b.status.value == "active"}
+    lines = ["```mermaid", "graph LR"]
+    for owner in state.blocks:
+        if owner.status.value != "active":
+            continue
+        lines.append(f'  subgraph {owner.id}["{_mermaid_label(owner.title)}"]')
+        for task in sorted(by_block.get(owner.id, []), key=lambda item: item.order):
+            lines.append(f'    {task.id}["{_mermaid_label(task.title)}"]')
+        lines.append("  end")
+    for task in active.values():
+        if task.block not in active_block_ids:
+            lines.append(f'  {task.id}["{_mermaid_label(task.title)}"]')
+    for task in active.values():
+        for dep in task.depends_on:
+            if dep in active:
+                lines.append(f"  {dep} --> {task.id}")
+    lines.append("```")
+    return "\n".join(lines)
+
+
+def _blocked_because(state: State, task: Any) -> str:
+    parts: list[str] = []
+    for ref in task.blocked_by:
+        severity = _decompose_item_severity(state, ref)
+        if severity is None or _SEV_RANK[severity] > 1:
+            continue
+        if ref.startswith("O"):
+            question = next((item for item in state.questions if item.id == ref), None)
+            if question is None:
+                continue
+            parts.append(f"{ref} [{severity}, {question.audience.value}] «{question.text}»")
+        else:
+            finding = next((item for item in state.findings if item.id == ref), None)
+            if finding is None:
+                continue
+            parts.append(f"{ref} [{severity}] «{finding.title}»")
+    return ", ".join(parts)
+
+
+def build_decompose_view(state: State) -> dict[str, Any]:
+    tasks_by_block: dict[str, list[Any]] = {}
+    for t in state.tasks:
+        tasks_by_block.setdefault(t.block, []).append(t)
+    for lst in tasks_by_block.values():
+        lst.sort(key=lambda t: t.order)
+
+    blocks = [b.model_dump(mode="json") for b in state.blocks if b.status.value == "active"]
+    for b in blocks:
+        b["tasks"] = [
+            {
+                **t.model_dump(mode="json"),
+                "blocked": _decompose_task_blocked(state, t),
+            }
+            for t in tasks_by_block.get(b["id"], [])
+            if t.status.value != "dropped"
+        ]
+
+    blocked = [
+        {"id": t.id, "because": _blocked_because(state, t)}
+        for t in state.tasks
+        if t.status.value == "todo" and _decompose_task_blocked(state, t)
+    ]
+
+    coverage: dict[str, Any] = {}
+    for r in state.requirements:
+        blk = next((b.id for b in state.blocks if r.id in b.requirements), None)
+        tsk = [t.id for t in state.tasks if r.id in t.requirements]
+        coverage[r.id] = {"block": blk, "tasks": tsk}
+
+    return {
+        "blocks": blocks,
+        "blocked_tasks": blocked,
+        "coverage": coverage,
+        "uncovered": state.coverage.uncovered,
+        "skipped": state.coverage.skipped,
+        "assumptions": [
+            d for d in state.decisions if d.kind.value == "assumption" and d.superseded_by is None
+        ],
+    }
+
+
+def render_decomposition_md(state: State) -> str:
+    env = Environment(
+        loader=FileSystemLoader(Path(__file__).parent),
+        trim_blocks=True,
+        lstrip_blocks=True,
+        keep_trailing_newline=True,
+    )
+    template = env.get_template("decomposition.md.j2")
+    return template.render(
+        state=state, view=build_decompose_view(state), mermaid=_build_mermaid(state)
+    )

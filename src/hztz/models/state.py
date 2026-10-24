@@ -202,6 +202,74 @@ class Decision(HZModel):
     superseded_by: str | None = None
 
 
+# --- block -----------------------------------------------------------------
+
+
+class BKind(StrEnum):
+    data = "data"
+    service = "service"
+    job = "job"
+    api = "api"
+    ui = "ui"
+    integration = "integration"
+    infra = "infra"
+
+
+class BStatus(StrEnum):
+    active = "active"
+    dropped = "dropped"
+
+
+class FileAction(StrEnum):
+    create = "create"
+    modify = "modify"
+
+
+class FileRef(HZModel):
+    path: str
+    action: FileAction
+
+
+class Block(HZModel):
+    id: str
+    kind: BKind
+    title: str
+    purpose: str
+    requirements: list[str]
+    decisions: list[str] = Field(default_factory=list)
+    contract: str
+    files: list[FileRef] = Field(default_factory=list)
+    status: BStatus = BStatus.active
+    created_at: datetime = Field(default_factory=now_utc)
+
+
+# --- task ------------------------------------------------------------------
+
+
+class TStatus(StrEnum):
+    todo = "todo"
+    in_progress = "in_progress"
+    done = "done"
+    dropped = "dropped"
+
+
+class Task(HZModel):
+    id: str
+    block: str
+    order: int
+    title: str
+    goal: str
+    requirements: list[str]
+    depends_on: list[str] = Field(default_factory=list)
+    blocked_by: list[str] = Field(default_factory=list)
+    done_when: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    status: TStatus = TStatus.todo
+    needs_review: bool = False
+    started_at: datetime | None = None
+    done_at: datetime | None = None
+
+
 # --- top-level state -------------------------------------------------------
 
 
@@ -266,7 +334,7 @@ class State(HZModel):
     findings: list[Finding] = Field(default_factory=list)
     questions: list[Question] = Field(default_factory=list)
     decisions: list[Decision] = Field(default_factory=list)
-    blocks: list[dict[str, Any]] = Field(default_factory=list)
-    tasks: list[dict[str, Any]] = Field(default_factory=list)
+    blocks: list[Block] = Field(default_factory=list)
+    tasks: list[Task] = Field(default_factory=list)
     coverage: Coverage = Field(default_factory=Coverage)
     log: list[LogEntry] = Field(default_factory=list)

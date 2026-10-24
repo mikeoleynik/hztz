@@ -1,0 +1,64 @@
+# Decomposition: {{ state.spec.path if state.spec else "—" }}
+
+{% set summary = state.summary %}
+{% if summary %}
+> {{ summary.feynman }}
+{% endif %}
+
+## Порядок и зависимости
+
+{{ mermaid | replace("\\n", "\n") }}
+
+## Заблокировано
+
+{% for item in view.blocked_tasks %}
+- {{ item.id }}{% if item.because %} ← {{ item.because }}{% endif %}
+{% else %}
+_(нет)_
+{% endfor %}
+
+{% for b in view.blocks %}
+## {{ b.id }} — {{ b.title }}
+
+**Назначение.** {{ b.purpose }}
+**Требования.** {{ b.requirements | join(" ") }}{% if b.decisions %} · **Решения.** {{ b.decisions | join(" ") }}{% endif %}
+**Контракт.** {{ b.contract }}
+{% if b.files %}**Файлы.** {{ b.files | map(attribute="path") | join(" · ") }}{% endif %}
+
+{% for t in b.tasks %}
+### {{ t.id }} — {{ t.title }}   [{{ t.status }}{% if t.blocked %} ⛔{% endif %}]
+**Цель.** {{ t.goal }} · **Срез.** {{ t.requirements | join(" ") }}
+{% if t.depends_on %}**Зависит от.** {{ t.depends_on | join(" ") }}{% endif %}
+**Done when.** {% for d in t.done_when %}- [ ] {{ d }}
+{% endfor %}{% if t.notes %}**Заметки.** {{ t.notes | join(" · ") }}{% endif %}
+
+{% endfor %}
+{% endfor %}
+
+## Покрытие требований
+
+| R | Блок | Задачи |
+|---|---|---|
+{% for rid, c in view.coverage.items() %}| {{ rid }} | {{ c.block or "—" }} | {{ c.tasks | join(" ") or "—" }} |
+{% endfor %}
+
+{% if view.uncovered %}
+## Непокрытые
+
+{% for u in view.uncovered %}- {{ u.requirement }} ({{ u.reason }}): {{ u.detail }}
+{% endfor %}
+{% endif %}
+
+{% if view.skipped %}
+## Вне скоупа
+
+{% for s in view.skipped %}- {{ s.requirement }} — {{ s.out_of_scope }}
+{% endfor %}
+{% endif %}
+
+{% if view.assumptions %}
+## Допущения в реализации
+
+{% for d in view.assumptions %}- {{ d.id }} · {{ d.text }}
+{% endfor %}
+{% endif %}
