@@ -91,7 +91,7 @@ response_format = JSON Schema стадии (structured output; fallback — tool
 | `decompose` | `state` → `<summary> <requirements> <decisions> <open_items>`; `--repo` → `<repo_context>`; существующие `B`/`T` → `<existing_blocks> <existing_tasks>` | `--reset`, `-o`, `--json` |
 | `next`, `--list`, `--start`, `--done` | **LLM не вызывается** | всё |
 | `next [T\|B] --prompt` | выбранная `T` + её `B` → `<task> <block> <requirements> <decisions>`; файлы блока → `<task_files> <candidates>` | выбор `T`, `-q` |
-| `chat` | `--persona` → какой файл персоны добавить; `ID` → `<focus>`; `--resume` → `<history>`, `<state_delta>`; `-m` → одно сообщение | сохранение сессии, исполнение `/команд`, `-y` |
+| `chat` | `--persona` → файл персоны; снимок и проекция графа всегда; `--resume` нет: `hz -s` подставляет `<history>`, `<edited_paths>`, `<state_delta>` | сессия, слэши, `-y`; `-m` без инструментов |
 | глобальные `--model` | модель — да; текст промта — нет | `--json -q -v -y` |
 
 Принцип: флаг попадает в промт только если меняет **что** анализировать или **в каком контексте**. Флаги формата, вывода и подтверждений — не попадают никогда.
@@ -110,16 +110,17 @@ decompose        ←  summary, R_active, D_current,
 next (python)    ←  T[] + рёбра B/D/A/O              →  выбранная T
 next/context     ←  T, B, R, D, repo files            →  conventions, approach, uncertainties
 next/handoff     ←  T, B, R, D, context, open_items   →  markdown для исполнителя
-chat             ←  spec, state-projection, focus?,
-                    history, persona                  →  reply, kind, references, proposals
-CLI /команда     ←  proposal + подтверждение          →  тот же путь, что audit/next флаги
+chat (REPL)      ←  spec, state-projection, history?,
+                    edited_paths?, state_delta?     →  text, thinking?, patches
+chat -m          ←  spec, state-projection, message →  reply, kind, references, proposals
+CLI /команда     ←  набранный слэш + подтверждение  →  тот же путь, что audit/next флаги
 ```
 
 Что переходит между командами (по брифу):
 
 | Переход | Данные | Через |
 | --- | --- | --- |
-| `audit → chat` | `R A O D` + summary как `<state>`; конкретный объект как `<focus>` | `state.json` |
+| `audit → chat` | `R A O D` + summary как `<state>`; снимок ТЗ как `<spec>` | `state.json` |
 | `audit → decompose` | `summary`, активные `R`, актуальные `D`, открытые `A/O` с severity | `state.json` |
 | `chat → decompose` | ничего напрямую: чат порождает `D`/`O` только через CLI-команды, `decompose` читает их из состояния | `state.json` |
 | `decompose → next` | `B[]`, `T[]` с `order`, `depends_on`, `blocked_by`, `T.block` | `state.json` |
@@ -140,7 +141,7 @@ Python подставляет блоки в user message. Пустые/непр�
 | `<previous_requirements>` | `[{id, text, section}]` прошлой версии | extract (re-audit) |
 | `<requirements>` | `[{id, text, kind, section, line_start, line_end}]` | findings, questions, decompose, next/context (только `T.requirements`) |
 | `<summary>` | `{feynman, in_scope, out_of_scope}` | findings, decompose |
-| `<repo_context>` | `{stack, test_framework, tree (обрезанное), conventions[], key_files[{path, role, excerpt}]}` — собирает CLI эвристиками | findings, questions, decompose, chat |
+| `<repo_context>` | `{stack, test_framework, tree (обрезанное), conventions[], key_files[{path, role, excerpt}]}` — собирает CLI эвристиками | findings, questions, decompose |
 | `<decisions>` | `[{id, kind, text, closes[], option}]`, только актуальные | findings (re-audit), decompose, next/context |
 | `<existing_findings>` | `[{id, kind, requirements, title, quote, status}]` | findings (re-audit) |
 | `<existing_questions>` | `[{id, text, findings, status}]` открытые | questions |
@@ -151,9 +152,10 @@ Python подставляет блоки в user message. Пустые/непр�
 | `<task>` `<block>` | `T` и её `B` | next/context |
 | `<repo_tree>` `<task_files>` `<candidates>` | листинг; содержимое `B.files`; 3–6 файлов-кандидатов | next/context |
 | `<state>` | проекция: summary + все объекты в одну строку каждый | chat |
-| `<focus>` | объект и все связанные (`O2` → его `A`, их `R`, evidence, `D`, `T`, где он в `blocked_by`) | chat |
-| `<history>` | предыдущие ходы `[{role, content}]` | chat |
-| `<state_delta>` | `«since 2026-09-22: O2 → answered (D4); +T1..T9»` | chat (resume) |
+| `<history>` | текст реплик и результаты слэшей; без `thinking` и без hunk | chat (REPL) |
+| `<edited_paths>` | пути, которые эта сессия уже правила | chat (REPL) |
+| `<state_delta>` | одна строка про чужие изменения графа или снимка с курсора сессии | chat (REPL) |
+| `<message>` | последняя реплика пользователя | chat |
 
 Размер: `<spec>` целиком; `<repo_context>` — бюджет (например, ≤ 8k токенов), CLI режет по приоритету: конвенции → ключевые файлы → дерево.
 
@@ -258,21 +260,18 @@ call    system = common/* + next/context.md
 CLI:   рендер next/handoff.md → stdout
 ```
 
-### 8.6 `hz chat O4 --persona columbo`
+### 8.6 `hz chat --persona columbo`
 
 ```text
-CLI:   focus = O4 + A7 + R24 + T7(blocked_by O4)
+REPL    system = common/* + chat/prompt.md + chat/personas/columbo.md
+        user   = <spec> <state> <history>? <edited_paths>? <state_delta>? <message>
+        tools  = read_file, edit_file
+        →  поток: thinking?, text, patch*
+        граф не пишется, пока пользователь сам не введёт /assume и не подтвердит
 
-call    system = common/* + chat/prompt.md + chat/personas/columbo.md
-        user   = <spec> <state> <focus> <history> + "в проекте все алерты идут в Sentry"
+-m      тот же system, без инструментов
         schema = chat/schema.json
-        →  { kind:"proposal",
-             reply:"Понял. Тогда одна деталь: R24 говорит «уведомляет команду»…",
-             references:["O4","R24","A7"],
-             proposals:[{action:"assume", target:"O4",
-                         text:"Sentry, как все алерты проекта; команда — через on-call",
-                         rationale:"технический вопрос; основание — конвенция репозитория"}] }
-CLI:   печатает reply; показывает карточку «≡ hz audit O4 --assume "…" [y/N]»; по y — тот же код, что флаг
+        →  { kind, reply, references, proposals }
 ```
 
 ---
@@ -280,6 +279,6 @@ CLI:   печатает reply; показывает карточку «≡ hz au
 ## 9. Открытые вопросы
 
 1. **Стадия 2 одним вызовом или по `kind`.** Один вызов дешевле и проще сопоставлять; пять вызовов (по одному на `kind`) точнее на больших ТЗ. Промт `findings.md` не зависит от выбора — CLI может передать подмножество kinds в отдельном блоке `<kinds>`; пока не добавлен.
-2. **Стриминг чата.** Структурированный ответ не стримится. Альтернатива: текст стримом + завершающий блок ```` ```hz-proposals ```` с JSON. Выбрано структурированное — единообразно с остальными стадиями; если задержка будет мешать, переключить только `chat`.
+2. **Стриминг чата.** REPL стримит текст и `thinking` и ходит в `read_file` / `edit_file`. `-m` остаётся одним JSON по `chat/schema.json`.
 3. **`--question` без LLM.** `audience` ручного вопроса: флаг `--audience`, вопрос в консоли или дефолт `technical` (раз задаёт разработчик)? Пока — дефолт `technical`, меняется через `hz chat` не нужно.
 4. **Бюджет `<repo_context>`** и эвристики сборки (какие файлы — «ключевые») — детали реализации, но они влияют на качество `findings` (подавление) и `decompose` (files). Стоит зафиксировать после первых прогонов.

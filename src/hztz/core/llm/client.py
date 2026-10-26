@@ -7,6 +7,7 @@ Fallback — `response_format` json_object (гарантирует валидн�
 """
 
 import json
+from collections.abc import Iterator
 from typing import Any, cast
 
 from openai import OpenAI
@@ -71,3 +72,65 @@ class LLMClient:
         if content is None:
             raise ValueError("пустой ответ модели")
         return cast(dict[str, Any], json.loads(content))
+
+    def complete_text(self, system: str, user: str) -> str:
+        """Короткий ответ текстом. REPL-ход этим методом не идёт."""
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=cast(
+                Any,
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            ),
+        )
+        content = response.choices[0].message.content
+        if content is None or not content.strip():
+            raise ValueError("пустой ответ модели")
+        return content.strip()
+
+    def stream_turn(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> Iterator[dict[str, str]]:
+        """Стрим REPL: куски `thinking`/`text` и собранные `tool_call` в конце хода."""
+        stream = self._client.chat.completions.create(
+            model=self._model,
+            messages=cast(Any, messages),
+            tools=cast(Any, tools),
+            stream=True,
+        )
+        pending: dict[int, dict[str, str]] = {}
+        for chunk in stream:
+            choice = cast(Any, chunk).choices[0]
+            delta = choice.delta
+            reasoning = cast(Any, getattr(delta, "reasoning_content", None)) or cast(
+                Any, getattr(delta, "reasoning", None)
+            )
+            if isinstance(reasoning, str) and reasoning:
+                yield {"type": "thinking", "text": reasoning}
+            if delta.content:
+                yield {"type": "text", "text": delta.content}
+            for call in delta.tool_calls or []:
+                slot = pending.setdefault(
+                    call.index,
+                    {"id": "", "name": "", "arguments": ""},
+                )
+                if call.id:
+                    slot["id"] = call.id
+                function = call.function
+                if function is not None and function.name:
+                    slot["name"] += function.name
+                if function is not None and function.arguments:
+                    slot["arguments"] += function.arguments
+        for index in sorted(pending):
+            slot = pending[index]
+            yield {
+                "type": "tool_call",
+                "id": slot["id"],
+                "name": slot["name"],
+                "arguments": slot["arguments"],
+                "text": "",
+            }
